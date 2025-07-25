@@ -50,6 +50,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     response.push(buf[0] as char);
                 }
+                Ok(0_usize) | Ok(2_usize..) => {
+                    todo!()
+                }
                 Err(ref e) if e.kind() == io::ErrorKind::TimedOut => {
                     break;
                 }
