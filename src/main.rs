@@ -1,4 +1,5 @@
 use eframe::egui;
+use egui::style::Margin;
 use std::collections::VecDeque;
 use std::io::{self, Read, Write};
 use std::time::Duration;
@@ -157,92 +158,98 @@ impl GuiApp {
 
 impl eframe::App for GuiApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            if self.port.is_none() {
-                ui.horizontal(|ui| {
-                    if ui.button("Refresh").clicked() {
-                        self.refresh_ports();
-                    }
-                    ui.label("Port:");
-                    egui::ComboBox::from_id_source("port_select")
-                        .selected_text(
-                            self.ports
-                                .get(self.selected_port)
-                                .map(String::as_str)
-                                .unwrap_or("-"),
-                        )
-                        .show_ui(ui, |ui| {
-                            for (i, name) in self.ports.iter().enumerate() {
-                                ui.selectable_value(&mut self.selected_port, i, name);
+        egui::CentralPanel::default()
+            .frame(egui::Frame::default().inner_margin(Margin::same(20.0)))
+            .show(ctx, |ui| {
+                ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+                    if self.port.is_none() {
+                        ui.horizontal(|ui| {
+                            if ui.button("Refresh").clicked() {
+                                self.refresh_ports();
+                            }
+                            ui.label("Port:");
+                            egui::ComboBox::from_id_source("port_select")
+                                .selected_text(
+                                    self.ports
+                                        .get(self.selected_port)
+                                        .map(String::as_str)
+                                        .unwrap_or("-"),
+                                )
+                                .show_ui(ui, |ui| {
+                                    for (i, name) in self.ports.iter().enumerate() {
+                                        ui.selectable_value(&mut self.selected_port, i, name);
+                                    }
+                                });
+                            if ui.button("Open").clicked() {
+                                self.open_selected_port();
                             }
                         });
-                    if ui.button("Open").clicked() {
-                        self.open_selected_port();
-                    }
-                });
-                if !self.error.is_empty() {
-                    ui.colored_label(egui::Color32::RED, &self.error);
-                }
-            } else {
-                ui.horizontal(|ui| {
-                    if let Some(name) = &self.current_port_name {
-                        ui.label(format!("Connected: {name}"));
-                    } else {
-                        ui.label("Connected");
-                    }
-                    if ui.button("Disconnect").clicked() {
-                        self.disconnect();
-                    }
-                });
-
-                let input_id = egui::Id::new("serial_input");
-                let mut send = false;
-
-                ui.horizontal(|ui| {
-                    let resp = ui.add(egui::TextEdit::singleline(&mut self.input).id(input_id));
-                    send |= ui.button("Send").clicked();
-                    send |= resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-                    egui::ComboBox::from_id_source("newline")
-                        .selected_text(self.newline.label())
-                        .show_ui(ui, |ui| {
-                            ui.selectable_value(
-                                &mut self.newline,
-                                NewlineMode::None,
-                                NewlineMode::None.label(),
-                            );
-                            ui.selectable_value(
-                                &mut self.newline,
-                                NewlineMode::CR,
-                                NewlineMode::CR.label(),
-                            );
-                            ui.selectable_value(
-                                &mut self.newline,
-                                NewlineMode::LF,
-                                NewlineMode::LF.label(),
-                            );
-                            ui.selectable_value(
-                                &mut self.newline,
-                                NewlineMode::CRLF,
-                                NewlineMode::CRLF.label(),
-                            );
-                        });
-                });
-
-                if send {
-                    self.send_command();
-                    self.input.clear();
-                    ui.memory_mut(|mem| mem.request_focus(input_id));
-                }
-
-                egui::ScrollArea::vertical()
-                    .stick_to_bottom(true)
-                    .show(ui, |ui| {
-                        for line in &self.output {
-                            ui.label(line);
+                        if !self.error.is_empty() {
+                            ui.colored_label(egui::Color32::RED, &self.error);
                         }
-                    });
-            }
-        });
+                    } else {
+                        ui.horizontal(|ui| {
+                            if let Some(name) = &self.current_port_name {
+                                ui.label(format!("Connected: {name}"));
+                            } else {
+                                ui.label("Connected");
+                            }
+                            if ui.button("Disconnect").clicked() {
+                                self.disconnect();
+                            }
+                        });
+
+                        let input_id = egui::Id::new("serial_input");
+                        let mut send = false;
+
+                        ui.horizontal(|ui| {
+                            let resp =
+                                ui.add(egui::TextEdit::singleline(&mut self.input).id(input_id));
+                            send |= ui.button("Send").clicked();
+                            send |=
+                                resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                            egui::ComboBox::from_id_source("newline")
+                                .selected_text(self.newline.label())
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(
+                                        &mut self.newline,
+                                        NewlineMode::None,
+                                        NewlineMode::None.label(),
+                                    );
+                                    ui.selectable_value(
+                                        &mut self.newline,
+                                        NewlineMode::CR,
+                                        NewlineMode::CR.label(),
+                                    );
+                                    ui.selectable_value(
+                                        &mut self.newline,
+                                        NewlineMode::LF,
+                                        NewlineMode::LF.label(),
+                                    );
+                                    ui.selectable_value(
+                                        &mut self.newline,
+                                        NewlineMode::CRLF,
+                                        NewlineMode::CRLF.label(),
+                                    );
+                                });
+                        });
+
+                        if send {
+                            self.send_command();
+                            self.input.clear();
+                            ui.memory_mut(|mem| mem.request_focus(input_id));
+                        }
+
+                        egui::ScrollArea::vertical()
+                            .stick_to_bottom(true)
+                            .show(ui, |ui| {
+                                for line in &self.output {
+                                    ui.label(line);
+                                }
+                            });
+                    }
+                });
+            });
     }
 }
 
