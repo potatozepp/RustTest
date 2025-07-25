@@ -92,48 +92,60 @@ impl GuiApp {
     }
 
     fn send_command(&mut self) {
-        if self.port.is_none() {
-            return;
-        }
         let cmd = self.input.trim_end();
         if cmd.is_empty() {
             return;
         }
-        if let Some(port) = self.port.as_mut() {
-            if let Err(e) = port.write_all(cmd.as_bytes()) {
-                self.push_output(format!("Error sending: {e}"));
-                return;
-            }
-            if let Err(e) = port.write_all(self.newline.as_bytes()) {
-                self.push_output(format!("Error sending newline: {e}"));
-                return;
-            }
 
-            self.push_output(format!("> {}", cmd));
-            let mut response = String::new();
-            let mut buf = [0u8; 1];
-            loop {
-                match port.read(&mut buf) {
-                    Ok(1) => {
-                        if buf[0] == b'\n' {
-                            break;
-                        }
-                        response.push(buf[0] as char);
+        // Take the port out temporarily
+        let mut port = match self.port.take() {
+            Some(p) => p,
+            None => return,
+        };
+
+        if let Err(e) = port.write_all(cmd.as_bytes()) {
+            self.push_output(format!("Error sending: {e}"));
+            self.port = Some(port);
+            return;
+        }
+        if let Err(e) = port.write_all(self.newline.as_bytes()) {
+            self.push_output(format!("Error sending newline: {e}"));
+            self.port = Some(port);
+            return;
+        }
+
+        self.push_output(format!("> {}", cmd));
+
+        let mut response = String::new();
+        let mut buf = [0u8; 1];
+        loop {
+            match port.read(&mut buf) {
+                Ok(1) => {
+                    if buf[0] == b'\n' {
+                        break;
                     }
-                    Ok(_) => break,
-                    Err(ref e) if e.kind() == io::ErrorKind::TimedOut => break,
-                    Err(e) => {
-                        self.push_output(format!("Read error: {e}"));
-                        return;
-                    }
+                    response.push(buf[0] as char);
+                }
+                Ok(_) => break,
+                Err(ref e) if e.kind() == io::ErrorKind::TimedOut => break,
+                Err(e) => {
+                    self.push_output(format!("Read error: {e}"));
+                    self.port = Some(port);
+                    return;
                 }
             }
-            if !response.trim().is_empty() {
-                self.push_output(format!("< {}", response.trim_end()));
-            }
         }
+
+        if !response.trim().is_empty() {
+            self.push_output(format!("< {}", response.trim_end()));
+        }
+
+        // Put the port back
+        self.port = Some(port);
     }
 }
+
+
 
 impl eframe::App for GuiApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
