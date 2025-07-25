@@ -58,15 +58,21 @@ impl GuiApp {
 impl eframe::App for GuiApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
+            let input_id = egui::Id::new("serial_input");
+            let mut send = false;
+
             ui.horizontal(|ui| {
-                let resp = ui.text_edit_singleline(&mut self.input);
-                if ui.button("Send").clicked()
-                    || (resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)))
-                {
-                    self.send_command();
-                    self.input.clear();
-                }
+                let resp = ui.add(egui::TextEdit::singleline(&mut self.input).id(input_id));
+                send |= ui.button("Send").clicked();
+                send |= resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
             });
+
+            if send {
+                self.send_command();
+                self.input.clear();
+                ui.memory_mut(|mem| mem.request_focus(input_id));
+            }
+
             egui::ScrollArea::vertical().show(ui, |ui| {
                 ui.label(&self.output);
             });
