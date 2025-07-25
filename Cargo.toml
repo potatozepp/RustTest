@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 serialport = "4.2"
+eframe = "0.24"
