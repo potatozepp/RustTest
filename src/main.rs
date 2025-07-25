@@ -1,7 +1,7 @@
+use eframe::egui;
+use std::collections::VecDeque;
 use std::io::{self, Read, Write};
 use std::time::Duration;
-use std::collections::VecDeque;
-use eframe::egui;
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 enum NewlineMode {
@@ -39,6 +39,7 @@ struct GuiApp {
     output: VecDeque<String>,
     newline: NewlineMode,
     error: String,
+    current_port_name: Option<String>,
 }
 
 impl GuiApp {
@@ -51,6 +52,7 @@ impl GuiApp {
             output: VecDeque::new(),
             newline: NewlineMode::CRLF,
             error: String::new(),
+            current_port_name: None,
         }
     }
 
@@ -70,11 +72,13 @@ impl GuiApp {
 
     fn open_selected_port(&mut self) {
         if let Some(name) = self.ports.get(self.selected_port).cloned() {
-            match serialport::new(name, 9600)
+            match serialport::new(&name, 9600)
                 .timeout(Duration::from_millis(2000))
-                .open() {
+                .open()
+            {
                 Ok(p) => {
                     self.port = Some(p);
+                    self.current_port_name = Some(name);
                     self.error.clear();
                 }
                 Err(e) => {
@@ -143,9 +147,13 @@ impl GuiApp {
         // Put the port back
         self.port = Some(port);
     }
+
+    fn disconnect(&mut self) {
+        self.port = None;
+        self.current_port_name = None;
+        self.refresh_ports();
+    }
 }
-
-
 
 impl eframe::App for GuiApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
@@ -157,7 +165,12 @@ impl eframe::App for GuiApp {
                     }
                     ui.label("Port:");
                     egui::ComboBox::from_id_source("port_select")
-                        .selected_text(self.ports.get(self.selected_port).map(String::as_str).unwrap_or("-"))
+                        .selected_text(
+                            self.ports
+                                .get(self.selected_port)
+                                .map(String::as_str)
+                                .unwrap_or("-"),
+                        )
                         .show_ui(ui, |ui| {
                             for (i, name) in self.ports.iter().enumerate() {
                                 ui.selectable_value(&mut self.selected_port, i, name);
@@ -171,6 +184,17 @@ impl eframe::App for GuiApp {
                     ui.colored_label(egui::Color32::RED, &self.error);
                 }
             } else {
+                ui.horizontal(|ui| {
+                    if let Some(name) = &self.current_port_name {
+                        ui.label(format!("Connected: {name}"));
+                    } else {
+                        ui.label("Connected");
+                    }
+                    if ui.button("Disconnect").clicked() {
+                        self.disconnect();
+                    }
+                });
+
                 let input_id = egui::Id::new("serial_input");
                 let mut send = false;
 
@@ -181,10 +205,26 @@ impl eframe::App for GuiApp {
                     egui::ComboBox::from_id_source("newline")
                         .selected_text(self.newline.label())
                         .show_ui(ui, |ui| {
-                            ui.selectable_value(&mut self.newline, NewlineMode::None, NewlineMode::None.label());
-                            ui.selectable_value(&mut self.newline, NewlineMode::CR, NewlineMode::CR.label());
-                            ui.selectable_value(&mut self.newline, NewlineMode::LF, NewlineMode::LF.label());
-                            ui.selectable_value(&mut self.newline, NewlineMode::CRLF, NewlineMode::CRLF.label());
+                            ui.selectable_value(
+                                &mut self.newline,
+                                NewlineMode::None,
+                                NewlineMode::None.label(),
+                            );
+                            ui.selectable_value(
+                                &mut self.newline,
+                                NewlineMode::CR,
+                                NewlineMode::CR.label(),
+                            );
+                            ui.selectable_value(
+                                &mut self.newline,
+                                NewlineMode::LF,
+                                NewlineMode::LF.label(),
+                            );
+                            ui.selectable_value(
+                                &mut self.newline,
+                                NewlineMode::CRLF,
+                                NewlineMode::CRLF.label(),
+                            );
                         });
                 });
 
@@ -215,4 +255,3 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     Ok(())
 }
-
